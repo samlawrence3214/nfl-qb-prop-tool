@@ -63,3 +63,19 @@ a row-bootstrap 95% interval of 0.103–0.252 yards. Passing, receiving, and
 receptions remain on the direct model. The opportunity-first rushing model is a
 promising targeted upgrade, but the practical gain is modest and should be
 combined with better role/injury inputs before being treated as a major change.
+
+## Rushing role upgrade
+
+The rushing opportunity model was extended with prior carry share, carry-share
+trend, prior offensive snap rate, snap trend, depth-chart position, and weekly
+backfield injury counts. All game-result features remain lagged.
+
+| Model | Matched player-games | Rushing MAE | Carry MAE | Seasons won |
+|---|---:|---:|---:|---:|
+| Opportunity × efficiency | 9,212 | 23.644 | 3.973 | — |
+| Opportunity × efficiency + role | 9,212 | 23.207 | 3.843 | 8 of 8 |
+
+The role model reduced rushing error by 0.437 yards (1.85%) versus the basic
+two-stage model and by about 2.4% versus the original direct rushing model. It
+improved every test season from 2018 through 2025 and is now used for rushing
+projections in the site. Other markets continue to use their direct models.
