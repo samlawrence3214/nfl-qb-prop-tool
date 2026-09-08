@@ -44,3 +44,22 @@ more robust while retaining the test for future re-evaluation.
 
 Third-party projection feeds are not scraped into the public app unless their
 terms permit automated production use.
+
+## Opportunity-first test
+
+A second walk-forward experiment split each projection into expected opportunity
+and expected efficiency: attempts × yards per attempt, carries × yards per carry,
+targets × yards per target, or targets × catch rate.
+
+| Market | Player-games | Direct MAE | Two-stage MAE | Seasons won |
+|---|---:|---:|---:|---:|
+| Passing yards | 4,046 | 57.282 | 57.528 | 1 of 8 |
+| Rushing yards | 9,292 | 23.788 | 23.610 | 8 of 8 |
+| Receiving yards | 19,529 | 24.005 | 24.052 | 1 of 8 |
+| Receptions | 19,529 | 1.714 | 1.717 | 2 of 8 |
+
+Only rushing improved consistently. Its MAE gain was 0.178 yards (0.75%), with
+a row-bootstrap 95% interval of 0.103–0.252 yards. Passing, receiving, and
+receptions remain on the direct model. The opportunity-first rushing model is a
+promising targeted upgrade, but the practical gain is modest and should be
+combined with better role/injury inputs before being treated as a major change.

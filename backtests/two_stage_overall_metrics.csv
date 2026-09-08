@@ -1,0 +1,9 @@
+market,model,games,weighted_mae,weighted_bias,usage_mae
+passing,direct,4046.0,57.282,-4.164,6.548
+passing,two_stage,4046.0,57.528,-6.821,6.548
+receiving,direct,19529.0,24.005,-1.142,2.22
+receiving,two_stage,19529.0,24.052,-0.918,2.22
+receptions,direct,19529.0,1.714,-0.056,2.22
+receptions,two_stage,19529.0,1.717,-0.072,2.22
+rushing,direct,9292.0,23.788,-0.834,3.967
+rushing,two_stage,9292.0,23.61,0.627,3.967
