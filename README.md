@@ -16,10 +16,15 @@ two prior seasons and safely skips a season before its data release exists.
 Selections and paper-test records remain in the browser. No entered FanDuel data
 is committed to this public repository.
 
-## Important limitation
+## Backtesting
 
-The browser model was trained on 2018–2024 data and had an average unseen-season
-projection error of about 56 yards. It does not recommend or place bets.
-Use it for paper testing and disciplined recordkeeping.
+The browser uses compact Ridge models trained on historical player usage and
+production, opponent production allowed, game total, spread, rest, venue, and
+weather. Validation is walk-forward by season: each 2018–2025 test season was
+predicted using prior seasons only. See [BACKTEST_RESULTS.md](BACKTEST_RESULTS.md)
+and `backtests/season_metrics.csv` for the complete season-level results.
+
+The models do not recommend or place bets. Use them for paper testing and
+disciplined recordkeeping; projections can miss injuries and late role changes.
 
 Data: [nflverse](https://nflverse.nflverse.com/) / CC-BY 4.0 where applicable.
