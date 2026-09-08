@@ -64,7 +64,7 @@ for defense,g in rtg.group_by("opponent_team"):
     key=defense[0] if isinstance(defense,tuple) else defense
     rows=g.sort(["season","week"],descending=True).head(5)
     uses=rows["uses"].sum(); rush_eff[key]=None if not uses else float(rows["yards"].sum()/uses)
-depth_lookup={}; injury_lookup={}; player_injuries={}
+depth_lookup={}; injury_lookup={}; player_injuries={}; team_injury_context={}
 try:
     depth=nfl.load_depth_charts([year]).filter(pl.col("game_type")=="REG")
     for r in depth.select(["week","gsis_id","depth_team"]).iter_rows(named=True):
@@ -75,18 +75,38 @@ try:
     all_injuries=nfl.load_injuries([year]).filter(pl.col("game_type")=="REG")
     latest=all_injuries.sort("week",descending=True).unique("gsis_id",keep="first")
     player_injuries={str(r["gsis_id"]):r["report_status"] for r in latest.select(["gsis_id","report_status"]).iter_rows(named=True) if r["gsis_id"]}
-    injuries=all_injuries.filter(pl.col("position").is_in(["RB","FB"]))
+    ol={"C","G","OG","OT","T"}; defense={"DE","DT","DL","NT","LB","ILB","OLB","CB","DB","S","FS","SS"}
     weights={"out":1.0,"doubtful":.75,"questionable":.25}
+    for r in latest.select(["team","position","report_status"]).iter_rows(named=True):
+        team=str(r["team"]); pos=str(r["position"]); weight=weights.get(str(r["report_status"]).lower(),0)
+        ctx=team_injury_context.setdefault(team,{"offensive_line":0.0,"defense":0.0})
+        if pos in ol: ctx["offensive_line"]+=weight
+        if pos in defense: ctx["defense"]+=weight
+    injuries=all_injuries.filter(pl.col("position").is_in(["RB","FB"]))
     for r in injuries.select(["week","team","report_status"]).iter_rows(named=True):
         k=(str(r["team"]),int(r["week"])); injury_lookup[k]=injury_lookup.get(k,0)+weights.get(str(r["report_status"]).lower(),0)
 except Exception: pass
+pressure_rate={}
+try:
+    pbp=pl.concat([nfl.load_pbp([s]) for s in loaded[-2:]],how="diagonal_relaxed")
+    pbp=pbp.filter((pl.col("season_type")=="REG")&(pl.col("qb_dropback")==1)&pl.col("defteam").is_not_null())
+    pbp=pbp.with_columns(pl.max_horizontal([
+        pl.col("sack").fill_null(0),pl.col("qb_hit").fill_null(0)
+    ]).alias("pressure"))
+    pg=(pbp.group_by(["season","week","defteam"]).agg([
+        pl.col("pressure").sum().alias("pressures"),pl.len().alias("dropbacks")
+    ]).sort(["season","week"],descending=True))
+    for defense,g in pg.group_by("defteam"):
+        team=defense[0] if isinstance(defense,tuple) else defense
+        recent=g.head(5); pressure_rate[str(team)]=float(recent["pressures"].sum()/recent["dropbacks"].sum())
+except Exception as e: print(f"Pressure context unavailable: {e}")
 COORDS={"ARI":[33.5276,-112.2626],"ATL":[33.7554,-84.4008],"BAL":[39.278,-76.6227],"BUF":[42.7738,-78.787],"CAR":[35.2258,-80.8528],"CHI":[41.8623,-87.6167],"CIN":[39.0954,-84.516],"CLE":[41.5061,-81.6995],"DAL":[32.7473,-97.0945],"DEN":[39.7439,-105.0201],"DET":[42.34,-83.0456],"GB":[44.5013,-88.0622],"HOU":[29.6847,-95.4107],"IND":[39.7601,-86.1639],"JAX":[30.3239,-81.6373],"KC":[39.0489,-94.4839],"LA":[33.9535,-118.3392],"LAC":[33.9535,-118.3392],"LV":[36.0908,-115.183],"MIA":[25.958,-80.2389],"MIN":[44.9736,-93.2575],"NE":[42.0909,-71.2643],"NO":[29.9511,-90.0812],"NYG":[40.8135,-74.0745],"NYJ":[40.8135,-74.0745],"PHI":[39.9008,-75.1675],"PIT":[40.4468,-80.0158],"SEA":[47.5952,-122.3316],"SF":[37.403,-121.97],"TB":[27.9759,-82.5033],"TEN":[36.1665,-86.7713],"WAS":[38.9076,-76.8645]}
 def matchup(team):
     rows=upcoming.filter((pl.col("away_team")==team)|(pl.col("home_team")==team))
     if rows.is_empty(): return None
     g=rows.row(0,named=True); home=g["home_team"]==team; opp=g["away_team"] if home else g["home_team"]; margin=g["spread_line"]
     mfb=None if margin is None else float(margin if home else -margin); total=None if g["total_line"] is None else float(g["total_line"])
-    return {"week":int(g["week"]),"date":g["gameday"],"time_et":g["gametime"],"opponent":opp,"home":home,"stadium":g["stadium"],"indoors":str(g["roof"]).lower() in ("dome","closed"),"rest":int(g["home_rest"] if home else g["away_rest"]),"market_favored_by":mfb,"fanduel_favored_by":None,"total":total,"implied_team_total":None if (mfb is None or total is None) else total/2+mfb/2,"coordinates":COORDS.get(g["home_team"]),"opp_allowed":allowed.get(opp,{}),"opp_rush_eff":rush_eff.get(opp)}
+    return {"week":int(g["week"]),"date":g["gameday"],"time_et":g["gametime"],"opponent":opp,"home":home,"stadium":g["stadium"],"indoors":str(g["roof"]).lower() in ("dome","closed"),"rest":int(g["home_rest"] if home else g["away_rest"]),"market_favored_by":mfb,"fanduel_favored_by":None,"total":total,"implied_team_total":None if (mfb is None or total is None) else total/2+mfb/2,"coordinates":COORDS.get(g["home_team"]),"opp_allowed":allowed.get(opp,{}),"opp_rush_eff":rush_eff.get(opp),"opp_pressure_rate":pressure_rate.get(opp),"team_injuries":team_injury_context.get(team,{"offensive_line":0.0,"defense":0.0}),"opponent_injuries":team_injury_context.get(opp,{"offensive_line":0.0,"defense":0.0})}
 cols=["passing_yards","attempts","rushing_yards","carries","receiving_yards","receptions","targets"]
 players=[]
 def availability(roster_status,injury_status):
@@ -114,7 +134,10 @@ for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",
     injury_status=player_injuries.get(pid)
     availability_status=availability(first.get("roster_status"),injury_status)
     if availability_status in {"unavailable","out","doubtful"}: continue
-    players.append({"id":pid,"name":first["player_display_name"],"position":first["position"],"team":team,"markets":markets,"games":games,"upcoming":game,"injury_status":injury_status,"availability":{"status":availability_status,"roster_verified":roster_verified,"roster_status":first.get("roster_status")},"role":{"depth_team":depth_lookup.get((pid,week)),"backfield_injury_count":injury_lookup.get((team,week),0)},"scores":{"passing":av["attempts"],"rushing":av["carries"],"receiving":av["targets"],"receptions":av["targets"]}})
+    recent_snaps=[x["offense_pct"] for x in games[:3] if x["offense_pct"] is not None]
+    expected_snap=None if not recent_snaps else sum(recent_snaps)/len(recent_snaps)
+    depth_team=depth_lookup.get((pid,week))
+    players.append({"id":pid,"name":first["player_display_name"],"position":first["position"],"team":team,"markets":markets,"games":games,"upcoming":game,"injury_status":injury_status,"availability":{"status":availability_status,"roster_verified":roster_verified,"roster_status":first.get("roster_status")},"role":{"depth_team":depth_team,"likely_starter":None if depth_team is None else depth_team<=1,"expected_snap_pct":expected_snap,"backfield_injury_count":injury_lookup.get((team,week),0)},"scores":{"passing":av["attempts"],"rushing":av["carries"],"receiving":av["targets"],"receptions":av["targets"]}})
 selected={p["id"]:p for p in players if p["team"]=="CHI"}
 for market,limit in [("passing",40),("rushing",55),("receiving",75),("receptions",75)]:
     eligible=sorted((p for p in players if market in p["markets"]),key=lambda p:p["scores"][market],reverse=True)[:limit]
