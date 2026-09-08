@@ -89,6 +89,16 @@ no correlation warning is present. Slips can be saved to the local Paper
 Tracker, settled manually, and reviewed through win rate, units, drawdown, and
 losing-streak summaries. No wagers are placed.
 
+## SGP Builder
+
+The SGP Builder lets a user select a matchup and request two through five legs.
+It recommends the highest-rated eligible props from that game using individual
+model probability, role consistency, availability, starter status, and expected
+participation. It favors different players before repeating a player. Because
+same-game outcomes are correlated, the tool does not multiply the individual
+estimates into a claimed SGP probability. Recommended legs can be sent directly
+to the Slip Builder for live FanDuel price entry and feedback.
+
 ## Screenshot review
 
 The Bet Slip Review tab accepts a cropped screenshot and attempts local
