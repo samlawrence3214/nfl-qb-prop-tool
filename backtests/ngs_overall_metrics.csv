@@ -1,0 +1,9 @@
+market,model,games,weighted_mae,weighted_bias
+passing,current,4055.0,57.103,-4.594
+passing,current_plus_ngs,4055.0,57.058,-3.673
+receiving,current,15421.0,25.491,0.129
+receiving,current_plus_ngs,15421.0,25.526,-0.395
+receptions,current,15421.0,1.729,0.014
+receptions,current_plus_ngs,15421.0,1.729,-0.019
+rushing,current,6983.0,25.432,0.502
+rushing,current_plus_ngs,6983.0,25.4,0.578
