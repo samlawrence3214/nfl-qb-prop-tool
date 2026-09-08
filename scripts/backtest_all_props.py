@@ -60,7 +60,7 @@ for market,cfg in MARKETS.items():
         te["ridge"]=np.maximum(0,ridge.predict(te[feats])); te["hgb"]=np.maximum(0,hgb.predict(te[feats])); te["baseline"]=.5*te[f"{target}_mean_3"]+.3*te[f"{target}_mean_5"]+.2*te[f"{target}_mean_8"]
         for model in ["baseline","ridge","hgb"]:
             err=te[target]-te[model]; summaries.append({"market":market,"season":season,"model":model,"games":len(te),"mae":mean_absolute_error(te[target],te[model]),"rmse":mean_squared_error(te[target],te[model])**.5,"bias":err.mean(),"within_threshold_pct":(err.abs()<=cfg["within"]).mean()*100})
-        te["market"]=market; market_preds.append(te[["season","week","player_display_name","team",target,"baseline","ridge","hgb"]].rename(columns={target:"actual"}))
+        te["market"]=market; market_preds.append(te[["market","season","week","player_display_name","team",target,"baseline","ridge","hgb"]].rename(columns={target:"actual"}))
     mp=pd.concat(market_preds); all_preds.append(mp)
     pooled=mp.actual-mp.ridge; ranges[market]={"p10":round(float(pooled.quantile(.10)),2),"p25":round(float(pooled.quantile(.25)),2),"p75":round(float(pooled.quantile(.75)),2),"p90":round(float(pooled.quantile(.90)),2)}
     final=make_pipeline(SimpleImputer(strategy="median"),StandardScaler(),Ridge(alpha=20)).fit(df[feats],df[target]); imp,sc,reg=final
