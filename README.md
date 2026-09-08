@@ -54,4 +54,19 @@ not uploaded. Automatic NFL FanDuel player-prop prices are intentionally not
 claimed: the documented provider examined during development requires a paid
 business feed for NFL props.
 
+## Weekly context and risk screen
+
+The free weekly refresh also collects current depth position, projected snap
+participation from the last three games, weighted offensive-line injuries,
+weighted opponent defensive injuries, and the opponent's recent quarterback
+hit/sack rate when play-by-play is available. These fields appear in “Why this
+number?” and can force the price evaluator to pass when availability, starter
+status, or expected participation is weak.
+
+These new context fields are not silently inserted into the existing yardage
+coefficients. They must first be added to walk-forward training and demonstrate
+out-of-sample improvement. Routes run, late inactive announcements, coaching
+changes, and sportsbook line movement remain explicitly unverified because the
+project does not currently have dependable free feeds for them.
+
 Data: [nflverse](https://nflverse.nflverse.com/) / CC-BY 4.0 where applicable.
