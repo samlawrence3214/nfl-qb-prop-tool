@@ -78,12 +78,16 @@ leg shows the minimum FanDuel price needed to preserve a five-percentage-point
 model edge. A banner selection is not labeled as value until its live price is
 entered and evaluated.
 
-After evaluating a FanDuel line and price, a leg can be added to the Slip
-Builder. Multiple legs are combined only as an independence estimate. The tool
-flags same-game and same-team combinations because correlated probabilities
-cannot be priced by multiplying the individual estimates. Slips can be saved
-to the local Paper Tracker, settled manually, and reviewed through win rate,
-units, drawdown, and losing-streak summaries. No wagers are placed.
+The Slip Builder also contains a complete projected-line catalog. It ranks
+player props by modeled over probability by default, can be filtered or sorted
+by team, and supports one-click `+` additions without first opening each player.
+Users then enter current FanDuel prices for the selected legs and submit the
+whole slip for feedback. The feedback checks consistency, availability,
+modeled probability, price edge, number of legs, and same-team or same-game
+correlation. Multiple legs are combined only as an independence estimate when
+no correlation warning is present. Slips can be saved to the local Paper
+Tracker, settled manually, and reviewed through win rate, units, drawdown, and
+losing-streak summaries. No wagers are placed.
 
 ## Screenshot review
 
