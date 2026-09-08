@@ -21,10 +21,29 @@ try:
     stats=stats.join(snaps,left_on=["season","week","team","player_display_name"],right_on=["season","week","team","player"],how="left")
 except Exception:
     stats=stats.with_columns(pl.lit(None).cast(pl.Float64).alias("offense_pct"))
+roster_verified=False
 try:
-    roster=nfl.load_rosters([year]).select(["gsis_id","team"]).drop_nulls().unique("gsis_id",keep="last")
-    stats=stats.join(roster,left_on="player_id",right_on="gsis_id",how="left",suffix="_roster").with_columns(pl.coalesce(["team_roster","team"]).alias("current_team"))
-except Exception: stats=stats.with_columns(pl.col("team").alias("current_team"))
+    roster_raw=nfl.load_rosters([year])
+    roster_cols=[c for c in ["gsis_id","team","status"] if c in roster_raw.columns]
+    roster=(roster_raw.select(roster_cols).drop_nulls("gsis_id")
+        .unique("gsis_id",keep="last"))
+    if "status" not in roster.columns:
+        roster=roster.with_columns(pl.lit(None).cast(pl.String).alias("status"))
+    roster=roster.rename({"team":"roster_team","status":"roster_status"})
+    # Inner join is intentional: a historical stat line is not enough evidence
+    # that a player is on a current NFL roster.
+    stats=stats.join(roster,left_on="player_id",right_on="gsis_id",how="inner")
+    stats=stats.with_columns(pl.col("roster_team").alias("current_team"))
+    roster_verified=True
+except Exception as e:
+    # Fail conservatively if the roster feed is temporarily unavailable. Only
+    # players with statistics in the newest available season remain eligible.
+    print(f"Current roster verification unavailable: {e}")
+    newest=int(stats["season"].max())
+    stats=stats.filter(pl.col("season")==newest).with_columns([
+        pl.col("team").alias("current_team"),
+        pl.lit(None).cast(pl.String).alias("roster_status"),
+    ])
 schedule=nfl.load_schedules([year]).filter(pl.col("game_type")=="REG"); today=datetime.now(timezone.utc).date().isoformat(); upcoming=schedule.filter(pl.col("gameday")>=today).sort(["gameday","gametime"])
 MARKET_STATS={"passing":"passing_yards","rushing":"rushing_yards","receiving":"receiving_yards","receptions":"receptions"}
 # Last five team-games allowed by each defense. This is computed from prior games
@@ -70,6 +89,16 @@ def matchup(team):
     return {"week":int(g["week"]),"date":g["gameday"],"time_et":g["gametime"],"opponent":opp,"home":home,"stadium":g["stadium"],"indoors":str(g["roof"]).lower() in ("dome","closed"),"rest":int(g["home_rest"] if home else g["away_rest"]),"market_favored_by":mfb,"fanduel_favored_by":None,"total":total,"implied_team_total":None if (mfb is None or total is None) else total/2+mfb/2,"coordinates":COORDS.get(g["home_team"]),"opp_allowed":allowed.get(opp,{}),"opp_rush_eff":rush_eff.get(opp)}
 cols=["passing_yards","attempts","rushing_yards","carries","receiving_yards","receptions","targets"]
 players=[]
+def availability(roster_status,injury_status):
+    rs=str(roster_status or "").strip().lower()
+    inj=str(injury_status or "").strip().lower()
+    blocked_roster=("reserve","injured reserve","pup","suspend","waiv","released","retired","practice")
+    if any(x in rs for x in blocked_roster) or rs in {"res","dev"}:
+        return "unavailable"
+    if inj=="out": return "out"
+    if inj=="doubtful": return "doubtful"
+    if inj=="questionable": return "questionable"
+    return "available" if roster_verified else "unverified"
 for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",maintain_order=True):
     recent=g.head(8); first=recent.row(0,named=True); team=first["current_team"]; games=[]
     for r in recent.iter_rows(named=True):
@@ -82,7 +111,10 @@ for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",
     game=matchup(team)
     if not markets or game is None: continue
     pid=str(key[0] if isinstance(key,tuple) else key); week=game["week"]
-    players.append({"id":pid,"name":first["player_display_name"],"position":first["position"],"team":team,"markets":markets,"games":games,"upcoming":game,"injury_status":player_injuries.get(pid),"role":{"depth_team":depth_lookup.get((pid,week)),"backfield_injury_count":injury_lookup.get((team,week),0)},"scores":{"passing":av["attempts"],"rushing":av["carries"],"receiving":av["targets"],"receptions":av["targets"]}})
+    injury_status=player_injuries.get(pid)
+    availability_status=availability(first.get("roster_status"),injury_status)
+    if availability_status in {"unavailable","out","doubtful"}: continue
+    players.append({"id":pid,"name":first["player_display_name"],"position":first["position"],"team":team,"markets":markets,"games":games,"upcoming":game,"injury_status":injury_status,"availability":{"status":availability_status,"roster_verified":roster_verified,"roster_status":first.get("roster_status")},"role":{"depth_team":depth_lookup.get((pid,week)),"backfield_injury_count":injury_lookup.get((team,week),0)},"scores":{"passing":av["attempts"],"rushing":av["carries"],"receiving":av["targets"],"receptions":av["targets"]}})
 selected={p["id"]:p for p in players if p["team"]=="CHI"}
 for market,limit in [("passing",40),("rushing",55),("receiving",75),("receptions",75)]:
     eligible=sorted((p for p in players if market in p["markets"]),key=lambda p:p["scores"][market],reverse=True)[:limit]

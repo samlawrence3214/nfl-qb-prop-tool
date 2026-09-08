@@ -3,7 +3,9 @@
 A Bears-themed, browser-based player-prop projection tool with tabs for passing
 yards, rushing yards, receiving yards, receptions, and a Chicago Bears weekly
 projection board. Player logs, matchups, consensus spread, total, rest, venue,
-and available weather load automatically.
+and available weather load automatically. Player cards now require a current
+roster match when the roster feed is available; explicit out, doubtful,
+reserve, suspended, released, and practice-squad statuses are withheld.
 
 The Browse screen includes player search, team filters, market and consistency
 sorting, team-color cards, and a plain-language projection breakdown. The
@@ -39,5 +41,10 @@ seasons only. See [BACKTEST_RESULTS.md](BACKTEST_RESULTS.md) and the files under
 
 The models do not recommend or place bets. Use them for paper testing and
 disciplined recordkeeping; projections can miss injuries and late role changes.
+
+Each player detail also shows three lower alternative-line examples with an
+estimated over probability and model-implied fair odds. These estimates use the
+walk-forward residual distribution and are a research aid, not a substitute for
+the actual FanDuel line and price.
 
 Data: [nflverse](https://nflverse.nflverse.com/) / CC-BY 4.0 where applicable.
