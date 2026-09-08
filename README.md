@@ -47,4 +47,11 @@ estimated over probability and model-implied fair odds. These estimates use the
 walk-forward residual distribution and are a research aid, not a substitute for
 the actual FanDuel line and price.
 
+The price evaluator accepts the current FanDuel alternative line and American
+odds, calculates the sportsbook break-even probability, and compares it with
+the calibrated model estimate. The line and odds stay in the browser and are
+not uploaded. Automatic NFL FanDuel player-prop prices are intentionally not
+claimed: the documented provider examined during development requires a paid
+business feed for NFL props.
+
 Data: [nflverse](https://nflverse.nflverse.com/) / CC-BY 4.0 where applicable.
