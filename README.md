@@ -1,4 +1,4 @@
-# Bear Down Prop Lab
+# Slaws Betting Tool
 
 A Bears-themed, browser-based player-prop projection tool with tabs for passing
 yards, rushing yards, receiving yards, receptions, and a Chicago Bears weekly
@@ -68,5 +68,23 @@ coefficients. They must first be added to walk-forward training and demonstrate
 out-of-sample improvement. Routes run, late inactive announcements, coaching
 changes, and sportsbook line movement remain explicitly unverified because the
 project does not currently have dependable free feeds for them.
+
+## Slip Builder and paper testing
+
+After evaluating a FanDuel line and price, a leg can be added to the Slip
+Builder. Multiple legs are combined only as an independence estimate. The tool
+flags same-game and same-team combinations because correlated probabilities
+cannot be priced by multiplying the individual estimates. Slips can be saved
+to the local Paper Tracker, settled manually, and reviewed through win rate,
+units, drawdown, and losing-streak summaries. No wagers are placed.
+
+## Screenshot review
+
+The Bet Slip Review tab accepts a cropped screenshot and attempts local
+browser-based OCR using Tesseract.js. It matches exact recognized player names
+to the projection tool but does not trust OCR-extracted odds automatically.
+Users are warned to remove names, balances, account information, locations,
+QR codes, and bet identifiers before selecting an image. Screenshots and
+paper-bet records remain in the browser.
 
 Data: [nflverse](https://nflverse.nflverse.com/) / CC-BY 4.0 where applicable.
