@@ -1,10 +1,9 @@
-# NFL QB Prop Consistency Tool
+# Bear Down Prop Lab
 
-A browser-based, consistency-first quarterback passing-yards projection tool.
-The public page automatically loads recent quarterback game logs generated from
-free nflverse data. It reports a projected passing-yard total, historical
-uncertainty range, and workload-stability grade. The user can independently
-compare that projection with standard or alternate sportsbook lines.
+A Bears-themed, browser-based player-prop projection tool with tabs for passing
+yards, rushing yards, receiving yards, receptions, and a Chicago Bears weekly
+projection board. Player logs, matchups, consensus spread, total, rest, venue,
+and available weather load automatically.
 
 ## Data refresh
 
