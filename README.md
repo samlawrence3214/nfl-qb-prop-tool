@@ -20,9 +20,11 @@ is committed to this public repository.
 
 The browser uses compact Ridge models trained on historical player usage and
 production, opponent production allowed, game total, spread, rest, venue, and
-weather. Validation is walk-forward by season: each 2018–2025 test season was
-predicted using prior seasons only. See [BACKTEST_RESULTS.md](BACKTEST_RESULTS.md)
-and `backtests/season_metrics.csv` for the complete season-level results.
+weather. Rushing also uses a tested opportunity × efficiency model with carry
+share, snaps, depth chart, and backfield injury context. Validation is
+walk-forward by season: each 2018–2025 test season was predicted using prior
+seasons only. See [BACKTEST_RESULTS.md](BACKTEST_RESULTS.md) and the files under
+`backtests/` for the complete season-level results.
 
 The models do not recommend or place bets. Use them for paper testing and
 disciplined recordkeeping; projections can miss injuries and late role changes.
