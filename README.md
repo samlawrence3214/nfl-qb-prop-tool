@@ -5,6 +5,17 @@ yards, rushing yards, receiving yards, receptions, and a Chicago Bears weekly
 projection board. Player logs, matchups, consensus spread, total, rest, venue,
 and available weather load automatically.
 
+The Browse screen includes player search, team filters, market and consistency
+sorting, team-color cards, and a plain-language projection breakdown. The
+Consistency Board surfaces steady recent roles while clearly separating role
+stability from sportsbook value. See `CLAUDE_INTEGRATION_AUDIT.md` for the
+design and viability review that shaped these choices.
+
+The interface also includes player search, team filters, projection/consistency
+sorting, a cross-market Consistency Board, and a transparent “Why this number?”
+panel. See [CLAUDE_INTEGRATION_AUDIT.md](CLAUDE_INTEGRATION_AUDIT.md) for the
+design import and viability decisions.
+
 ## Data refresh
 
 GitHub Actions runs `scripts/update_data.py` every Tuesday at 12:30 UTC and can
