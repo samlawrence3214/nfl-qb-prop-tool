@@ -5,6 +5,18 @@ const slawsSave=()=>{localStorage.setItem("slaws_slip",JSON.stringify(slawsSlip)
 const slawsGame=leg=>leg.date+"|"+[leg.team,leg.opponent].sort().join("-");
 const americanBreakEven=o=>o<0?-o/(-o+100):100/(o+100);
 const decimalPayout=o=>o>0?1+o/100:1+100/-o;
+function slawsCandidateLine(p,m){let x=project(p,m),step=CFG[m].step,base=Math.max(m==="receptions"?.5:0,Math.floor(x/step)*step-.5);return{line:Math.max(0,base-step),projection:x}}
+function slawsCandidates(){
+  let out=[];for(let p of DATA)for(let m of p.markets){let role=p.role||{},s=consistency(p,m);if(p.availability?.status!=="available"||s<7||role.likely_starter===false||(Number.isFinite(role.expected_snap_pct)&&role.expected_snap_pct<.5))continue;let z=slawsCandidateLine(p,m),probability=overProbability(z.projection,z.line,m);if(probability<.64)continue;out.push({p,m,s,...z,probability,score:probability+s*.012})}
+  return out.sort((a,b)=>b.score-a.score);
+}
+function slawsRenderBanner(){
+  let root=document.getElementById("modelBanner");if(!root||!DATA.length)return;let a=slawsCandidates(),best=a[0];if(!best){root.innerHTML='<div class="signal warn">No player currently clears the availability and consistency screen.</div>';return}
+  let bestGame=slawsGame({date:best.p.upcoming.date,team:best.p.team,opponent:best.p.upcoming.opponent}),second=a.find(x=>x.p.team!==best.p.team&&slawsGame({date:x.p.upcoming.date,team:x.p.team,opponent:x.p.upcoming.opponent})!==bestGame),pair=second?[best,second]:[best],combined=pair.reduce((v,x)=>v*x.probability,1);
+  const line=x=>{let price=fairOdds(Math.max(.01,x.probability-.05));return `<div class="pick-line"><b>${x.p.name} over ${x.line.toFixed(1)} ${CFG[x.m].label.toLowerCase()}</b><br><span class="fine">${Math.round(x.probability*100)}% estimate • ${x.s}/10 consistency • minimum acceptable price ${price>0?"+":""}${price} or better</span></div>`};
+  root.innerHTML=`<div class="model-pick"><h3>Best model spot</h3><div class="pick-title">${best.p.name}</div>${line(best)}<div class="fine">Not a value bet until the current FanDuel price passes the 5-point edge check.</div><button class="action secondary banner-player" data-id="${best.p.id}" data-market="${best.m}">Open player</button></div><div class="model-pick"><h3>2-leg paper parlay</h3>${pair.map(line).join("")}<div class="fine">${pair.length===2?`Independent combined estimate: ${Math.round(combined*100)}%. Enter both live prices before using.`:"A second independent leg did not clear today's screen."}</div></div>`;
+  root.querySelectorAll(".banner-player").forEach(b=>b.onclick=()=>select(b.dataset.id,b.dataset.market));
+}
 function slawsShow(view){
   ["browseView","consistentView","bearsView","slipView","trackerView","reviewView"].forEach(id=>document.getElementById(id)?.classList.toggle("hidden",id!==view));
   UI.marketNav.classList.toggle("hidden",view!=="browseView");
@@ -62,7 +74,9 @@ function slawsSetup(){
   let top=document.querySelector("nav.nav"),bears=top.querySelector('[data-view="bears"]');
   [{label:"Slip Builder",view:"slipView"},{label:"Paper Tracker",view:"trackerView"},{label:"Bet Slip Review",view:"reviewView"}].forEach(x=>{let b=document.createElement("button");b.className="navbtn";b.dataset.slawsView=x.view;b.textContent=x.label;b.onclick=()=>slawsShow(x.view);top.insertBefore(b,bears)});
   bears.textContent="Bears Board";bears.onclick=()=>{setView("bears");slawsShow("bearsView")};top.querySelector('[data-view="browse"]').onclick=()=>{setView("browse");slawsShow("browseView")};top.querySelector('[data-view="consistent"]').onclick=()=>{setView("consistent");slawsShow("consistentView")};
+  UI.browseView.insertAdjacentHTML("afterbegin",'<div id="modelBanner" class="model-banner"></div>');
   let main=document.querySelector("main");main.insertAdjacentHTML("beforeend",`<section id="slipView" class="feature-view hidden"><div class="feature-panel"><h2>Slip Builder</h2><div class="local-note">Legs stay on this device. Same-game and same-team combinations are flagged because their outcomes may be correlated.</div><div id="slipLegs"></div><div id="slipSummary"></div></div></section><section id="trackerView" class="feature-view hidden"><div class="feature-panel"><h2>Paper Tracker</h2><div id="trackerStats" class="stat-row"></div><div class="tracker-table"><table><thead><tr><th>Date</th><th>Legs</th><th>Odds</th><th>Estimate</th><th>Result</th><th>Closing line / note</th><th></th></tr></thead><tbody id="trackerRows"></tbody></table></div></div></section><section id="reviewView" class="feature-view hidden"><div class="feature-panel"><h2>Bet Slip Screenshot Review</h2><div class="signal warn"><b>Privacy:</b> Crop out your name, account number, balance, location, QR codes, and bet identifiers before selecting a screenshot. The image is processed in this browser and is not saved by this site.</div><input id="slipUpload" type="file" accept="image/png,image/jpeg,image/webp"><img id="slipImage" class="screenshot-preview hidden" alt="Selected bet slip"><div id="ocrStatus" class="local-note"></div><div id="ocrMatches"></div><pre id="ocrText" class="ocr-output"></pre><div class="local-note">OCR is only an aid. It may misread names, decimal points, plus/minus signs, or odds. Verify the sportsbook screen manually.</div></div></section>`);
   let originalEvaluate=evaluatePrice;UI.evaluatePrice.onclick=()=>{originalEvaluate();slawsDecorateEvaluation()};document.getElementById("slipUpload").onchange=e=>{if(e.target.files[0])slawsReviewImage(e.target.files[0])};
 }
 slawsSetup();
+let slawsBannerTimer=setInterval(()=>{if(DATA.length){clearInterval(slawsBannerTimer);slawsRenderBanner()}},100);
