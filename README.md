@@ -71,6 +71,13 @@ project does not currently have dependable free feeds for them.
 
 ## Slip Builder and paper testing
 
+The main page includes a compact Best Model Spot and two-leg paper-parlay
+banner. Candidates must clear roster, participation, and consistency screens.
+The two-leg example excludes same-team and same-game combinations, and every
+leg shows the minimum FanDuel price needed to preserve a five-percentage-point
+model edge. A banner selection is not labeled as value until its live price is
+entered and evaluated.
+
 After evaluating a FanDuel line and price, a leg can be added to the Slip
 Builder. Multiple legs are combined only as an independence estimate. The tool
 flags same-game and same-team combinations because correlated probabilities
