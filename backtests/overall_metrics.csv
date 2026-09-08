@@ -1,0 +1,13 @@
+market,model,games,weighted_mae,weighted_rmse,weighted_within_pct
+passing,baseline,4046.0,62.153,77.759,39.076
+passing,hgb,4046.0,57.717,72.076,42.264
+passing,ridge,4046.0,57.24,71.601,42.165
+receiving,baseline,19529.0,24.9,32.507,50.745
+receiving,hgb,19529.0,23.935,31.114,50.499
+receiving,ridge,19529.0,24.005,31.147,50.289
+receptions,baseline,19529.0,1.776,2.261,64.54
+receptions,hgb,19529.0,1.704,2.178,66.394
+receptions,ridge,19529.0,1.714,2.181,65.994
+rushing,baseline,9292.0,24.466,32.167,40.088
+rushing,hgb,9292.0,23.769,31.1,38.356
+rushing,ridge,9292.0,23.788,31.074,38.409
