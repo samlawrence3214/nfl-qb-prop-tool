@@ -2,8 +2,9 @@
 
 A browser-based, consistency-first quarterback passing-yards projection tool.
 The public page automatically loads recent quarterback game logs generated from
-free nflverse data. The user manually enters the current FanDuel line and game
-conditions.
+free nflverse data. It reports a projected passing-yard total, historical
+uncertainty range, and workload-stability grade. The user can independently
+compare that projection with standard or alternate sportsbook lines.
 
 ## Data refresh
 
@@ -18,8 +19,8 @@ is committed to this public repository.
 
 ## Important limitation
 
-The model was trained on 2018–2024 data and had an average historical projection
-error of roughly 58 passing yards. It does not guarantee profit or place bets.
+The browser model was trained on 2018–2024 data and had an average unseen-season
+projection error of about 56 yards. It does not recommend or place bets.
 Use it for paper testing and disciplined recordkeeping.
 
 Data: [nflverse](https://nflverse.nflverse.com/) / CC-BY 4.0 where applicable.
