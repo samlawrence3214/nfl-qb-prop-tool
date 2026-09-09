@@ -94,10 +94,16 @@ losing-streak summaries. No wagers are placed.
 The SGP Builder lets a user select a matchup and request two through five legs.
 It recommends the highest-rated eligible props from that game using individual
 model probability, role consistency, availability, starter status, and expected
-participation. It favors different players before repeating a player. Because
-same-game outcomes are correlated, the tool does not multiply the individual
-estimates into a claimed SGP probability. Recommended legs can be sent directly
-to the Slip Builder for live FanDuel price entry and feedback.
+participation. It favors different players before repeating a player.
+
+Joint SGP estimates use a Gaussian-copula simulation whose correlation matrix
+is learned from walk-forward prediction residuals. Relationships distinguish
+same-player props, QB-to-receiver stacks, other teammates, opposing QBs, and
+other opponents. Correlations are shrunk toward zero based on sample size and
+are ignored below the published minimum sample. See
+`backtests/sgp_correlation_summary.csv`. The resulting estimate is still not a
+guarantee and requires comparison with the current FanDuel line and price.
+Recommended legs can be sent directly to the Slip Builder for that check.
 
 ## Screenshot review
 
