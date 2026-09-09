@@ -79,3 +79,26 @@ The role model reduced rushing error by 0.437 yards (1.85%) versus the basic
 two-stage model and by about 2.4% versus the original direct rushing model. It
 improved every test season from 2018 through 2025 and is now used for rushing
 projections in the site. Other markets continue to use their direct models.
+
+## Consistency-score check
+
+The imported 0–10 score combines recent usage and production variation relative
+to the player's average. A matched historical check found that higher scores do
+not consistently produce smaller absolute errors; high-volume players can be
+steady proportionally while still missing by more raw yards. The site therefore
+uses the score for sorting and role context only. It is not displayed as a win
+probability or betting edge.
+## SGP correlation validation
+
+The SGP component estimates pairwise correlations from walk-forward model
+residuals and shrinks each estimate by `n / (n + 150)`. A Gaussian-copula
+simulation combines the calibrated marginal probabilities. The correlation
+fit used seasons through 2023 and was evaluated on 2024–2025 pairs at 55%, 65%,
+and 75% marginal hit-rate thresholds.
+
+Across 333,504 weighted held-out pair tests, the correlation-aware probability
+had a Brier score of **0.23498**, compared with **0.23588** for independence.
+This is a real but modest improvement. The model therefore reports the joint
+estimate with a warning and never treats it as proof that an SGP is valuable.
+Full results are in `backtests/sgp_joint_validation.csv`; fitted relationships
+are in `backtests/sgp_correlation_summary.csv`.
