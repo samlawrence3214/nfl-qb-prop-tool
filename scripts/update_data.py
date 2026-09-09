@@ -109,16 +109,23 @@ except Exception as e:
         response.raise_for_status(); payload=response.json()
         if int(payload.get("season",{}).get("year",0))!=year: raise RuntimeError("ESPN injury season is not current")
         weights={"out":1.0,"doubtful":.75,"questionable":.25}; ol={"C","G","OG","OT","T"}; defense={"DE","DT","DL","NT","LB","ILB","OLB","CB","DB","S","FS","SS"}
-        name_status={}; injury_rows=0
-        for team_row in payload.get("injuries",[]):
-            team=str(team_row.get("team",{}).get("abbreviation","")).upper()
-            for item in team_row.get("injuries",[]):
-                athlete=item.get("athlete",{}); name=str(athlete.get("fullName","")).strip(); status=str(item.get("status","")).strip(); pos=str(athlete.get("position",{}).get("abbreviation","")).upper()
-                if not name or not status: continue
-                injury_rows+=1; name_status[name.casefold()]=status
-                weight=weights.get(status.lower(),0); ctx=team_injury_context.setdefault(team,{"offensive_line":0.0,"defense":0.0})
-                if pos in ol: ctx["offensive_line"]+=weight
-                if pos in defense: ctx["defense"]+=weight
+        name_status={}; injury_rows=0; entries=[]
+        if payload.get("items"):
+            entries=[(None,item) for item in payload["items"]]
+        else:
+            for team_row in payload.get("injuries",[]):
+                team_info=team_row.get("team",team_row)
+                team_hint=team_info.get("abbreviation") or team_info.get("displayName")
+                entries.extend((team_hint,item) for item in team_row.get("injuries",[]))
+        for team_hint,item in entries:
+            athlete=item.get("athlete",{}); athlete_team=athlete.get("team",{}) or {}
+            team=str(athlete_team.get("abbreviation") or team_hint or "").upper()
+            name=str(athlete.get("fullName") or athlete.get("displayName") or "").strip(); status=str(item.get("status","")).strip(); pos=str(athlete.get("position",{}).get("abbreviation","")).upper()
+            if not name or not status: continue
+            injury_rows+=1; name_status[name.casefold()]=status
+            weight=weights.get(status.lower(),0); ctx=team_injury_context.setdefault(team,{"offensive_line":0.0,"defense":0.0})
+            if pos in ol: ctx["offensive_line"]+=weight
+            if pos in defense: ctx["defense"]+=weight
         if not injury_rows: raise RuntimeError("ESPN current injury feed returned no rows")
         for row in stats.select(["player_id","player_display_name"]).unique("player_id").iter_rows(named=True):
             status=name_status.get(str(row["player_display_name"]).casefold())
