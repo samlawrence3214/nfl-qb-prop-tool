@@ -172,9 +172,12 @@ for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",
         tc=float(r["team_carries"] or 0); carries=float(r["carries"] or 0)
         games.append({"season":int(r["season"]),"week":int(r["week"]),"team":r["team"],"opponent":r["opponent_team"],"carry_share":None if not tc else carries/tc,"carry_rank":None if r["carry_rank"] is None else float(r["carry_rank"]),"offense_pct":None if r["offense_pct"] is None else float(r["offense_pct"]),**{c:float(r[c] or 0) for c in cols}})
     av={c:sum(x[c] for x in games)/len(games) for c in cols}; markets=[]
-    if av["attempts"]>=10: markets.append("passing")
-    if av["carries"]>=3: markets.append("rushing")
-    if av["targets"]>=3: markets.extend(["receiving","receptions"])
+    # Keep the browse pool broad. Recommendation screens apply the stricter
+    # consistency, participation, availability, and probability requirements.
+    # A global top-N cutoff hid legitimate WR2/WR3 options and new acquisitions.
+    if av["attempts"]>=5: markets.append("passing")
+    if av["carries"]>=1: markets.append("rushing")
+    if av["targets"]>=.75: markets.extend(["receiving","receptions"])
     game=matchup(team)
     if not markets or game is None: continue
     pid=str(key[0] if isinstance(key,tuple) else key); week=game["week"]
@@ -201,11 +204,9 @@ for p in players:
     raw=1.0 if not demand else max(.65,min(1.25,capacity/demand));adjusted=1+.55*(raw-1)
     current_games=sum(g["team"]==p["team"] for g in p["games"])
     p["roster_context"]={"previous_team":p["games"][0]["team"],"changed_team":p["games"][0]["team"]!=p["team"],"recent_current_team_games":current_games,"recent_current_team_share":current_games/len(p["games"]),"new_skill_arrivals":new_skill_arrivals.get(p["team"],0),"rookie_skill_players":rookie_skill_counts.get(p["team"],0),"rookie_target_proxy":round(rookie_target_proxy.get(p["team"],0),2),"team_recent_target_demand":round(demand,2),"estimated_pass_capacity":round(capacity,2),"raw_target_factor":round(raw,4),"target_adjustment":round(adjusted,4),"method":"backtested roster target redistribution"}
-selected={p["id"]:p for p in players if p["team"]=="CHI"}
-for market,limit in [("passing",40),("rushing",55),("receiving",75),("receptions",75)]:
-    eligible=sorted((p for p in players if market in p["markets"]),key=lambda p:p["scores"][market],reverse=True)[:limit]
-    selected.update({p["id"]:p for p in eligible})
-players=list(selected.values())
+# Publish every eligible active-roster player. The browser can comfortably
+# filter this small league-wide dataset, and automatic picks remain protected
+# by the stricter screens in features.js.
 for p in players:p.pop("scores",None)
 OUT.write_text(json.dumps({"updated_at":datetime.now(timezone.utc).isoformat(),"seasons_loaded":loaded,"feeds":{"injuries":{"verified_for_week":injury_feed_verified,"latest_week":injury_week,"current_week":current_week,"rows":injury_rows,"source":injury_source},"depth_charts":{"verified_for_week":depth_feed_verified,"latest_week":depth_week,"current_week":current_week},"rosters":{"verified":roster_verified}},"players":sorted(players,key=lambda p:p["name"])},separators=(",",":")),encoding="utf-8")
 print(f"Wrote {len(players)} players to {OUT}")
