@@ -20,9 +20,12 @@ design import and viability decisions.
 
 ## Data refresh
 
-GitHub Actions runs `scripts/update_data.py` every Tuesday at 12:30 UTC and can
-also be run manually from the Actions tab. The script attempts the current and
-two prior seasons and safely skips a season before its data release exists.
+GitHub Actions runs `scripts/update_data.py` every day at 12:30 and 21:30 UTC
+and can also be run manually from the Actions tab. Each run reloads the newest
+available injury report, roster, schedule, depth chart, role, matchup, and
+weather inputs before rebuilding the projections. The script attempts the
+current and two prior seasons and safely skips a season before its data release
+exists.
 
 ## Privacy
 
@@ -120,6 +123,32 @@ are ignored below the published minimum sample. See
 `backtests/sgp_correlation_summary.csv`. The resulting estimate is still not a
 guarantee and requires comparison with the current FanDuel line and price.
 Recommended legs can be sent directly to the Slip Builder for that check.
+
+The generated number is now explicitly a model reference line. In the Slip
+Builder, every leg has an editable FanDuel line and odds field. Changing the
+line recalculates the individual probability, price edge, and (for one-game
+slips) the correlation-aware joint probability. A reference line cannot pass
+the final feedback gate until the user confirms it as the current FanDuel line.
+
+## Live-data safety and selection validation
+
+The scheduled refresh runs at 12:30 and 21:30 UTC every day. Automatic Best
+Spot and SGP recommendations pause when the JSON is more than 18 hours old, the
+current roster feed is unavailable, or the injury feed is not verified for the
+current NFL week. The updater fails visibly instead of publishing a refresh
+that silently treats missing injury data as healthy. Reserve, PUP, suspended,
+waived, released, retired, practice-squad, and cut statuses are excluded.
+Rookies in the current roster feed are included in the team target-competition
+estimate even before they have an NFL game log. Because the free depth-chart
+feed is incomplete, the SGP Builder also requires the user to confirm the
+current active lineup.
+
+`scripts/backtest_selection_pipeline.py` runs an untouched-season test of the
+projection-to-reference-line-to-probability-to-consistency selection path. Its
+latest output is summarized in `SELECTION_VALIDATION.md` and detailed in
+`backtests/selection_pipeline_holdout.csv`. It is a calibration check, not a
+profit claim: free historical files do not preserve FanDuel alt prices or the
+exact injury, roster, and depth-chart snapshots visible at bet time.
 
 ## Screenshot review
 

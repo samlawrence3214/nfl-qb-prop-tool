@@ -6,7 +6,9 @@ on:
     branches: [main]
     paths: [scripts/update_data.py]
   schedule:
-    - cron: "30 12 * * 2"
+    # Refresh every day after the morning news cycle and again before the
+    # evening slate. GitHub Actions cron uses UTC.
+    - cron: "30 12,21 * * *"
 
 permissions:
   contents: write

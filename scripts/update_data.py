@@ -11,6 +11,7 @@ for season in range(year-2,year+1):
     except Exception as e: print(f"Skipping unavailable {season}: {e}")
 if not frames: raise RuntimeError("No nflverse player data available")
 stats=pl.concat(frames,how="diagonal_relaxed").filter((pl.col("season_type")=="REG")&pl.col("position").is_in(["QB","RB","WR","TE"]))
+historical_ids=set(str(x) for x in stats["player_id"].drop_nulls().to_list())
 team_carries=(stats.filter(pl.col("position").is_in(["QB","RB","WR"]))
     .group_by(["season","week","team"]).agg(pl.col("carries").sum().alias("team_carries")))
 stats=stats.join(team_carries,on=["season","week","team"],how="left")
@@ -21,9 +22,14 @@ try:
     stats=stats.join(snaps,left_on=["season","week","team","player_display_name"],right_on=["season","week","team","player"],how="left")
 except Exception:
     stats=stats.with_columns(pl.lit(None).cast(pl.Float64).alias("offense_pct"))
-roster_verified=False
+roster_verified=False; rookie_target_proxy={}; rookie_skill_counts={}
 try:
     roster_raw=nfl.load_rosters([year])
+    for r in roster_raw.select([c for c in ["gsis_id","team","status","position"] if c in roster_raw.columns]).iter_rows(named=True):
+        pid=str(r.get("gsis_id") or "");team=str(r.get("team") or "");pos=str(r.get("position") or "");status=str(r.get("status") or "").lower()
+        blocked=any(x in status for x in ("reserve","pup","suspend","waiv","release","retired","practice","cut"))
+        if pid and team and pos in {"RB","WR","TE"} and pid not in historical_ids and not blocked:
+            proxy={"WR":3.0,"TE":2.0,"RB":1.5}[pos];rookie_target_proxy[team]=rookie_target_proxy.get(team,0)+proxy;rookie_skill_counts[team]=rookie_skill_counts.get(team,0)+1
     roster_cols=[c for c in ["gsis_id","team","status"] if c in roster_raw.columns]
     roster=(roster_raw.select(roster_cols).drop_nulls("gsis_id")
         .unique("gsis_id",keep="last"))
@@ -44,7 +50,7 @@ except Exception as e:
         pl.col("team").alias("current_team"),
         pl.lit(None).cast(pl.String).alias("roster_status"),
     ])
-schedule=nfl.load_schedules([year]).filter(pl.col("game_type")=="REG"); today=datetime.now(timezone.utc).date().isoformat(); upcoming=schedule.filter(pl.col("gameday")>=today).sort(["gameday","gametime"])
+schedule=nfl.load_schedules([year]).filter(pl.col("game_type")=="REG"); today=datetime.now(timezone.utc).date().isoformat(); upcoming=schedule.filter(pl.col("gameday")>=today).sort(["gameday","gametime"]); current_week=None if upcoming.is_empty() else int(upcoming["week"].min())
 MARKET_STATS={"passing":"passing_yards","rushing":"rushing_yards","receiving":"receiving_yards","receptions":"receptions"}
 # Last five team-games allowed by each defense. This is computed from prior games
 # only and becomes the matchup-strength input to the browser model.
@@ -64,16 +70,20 @@ for defense,g in rtg.group_by("opponent_team"):
     key=defense[0] if isinstance(defense,tuple) else defense
     rows=g.sort(["season","week"],descending=True).head(5)
     uses=rows["uses"].sum(); rush_eff[key]=None if not uses else float(rows["yards"].sum()/uses)
-depth_lookup={}; injury_lookup={}; player_injuries={}; team_injury_context={}
+depth_lookup={}; depth_feed_verified=False; depth_week=None; injury_lookup={}; player_injuries={}; team_injury_context={}; injury_feed_verified=False; injury_week=None; injury_rows=0
 try:
     depth=nfl.load_depth_charts([year]).filter(pl.col("game_type")=="REG")
-    for r in depth.select(["week","gsis_id","depth_team"]).iter_rows(named=True):
-        try: depth_lookup[(str(r["gsis_id"]),int(r["week"]))]=float(r["depth_team"])
+    if depth.is_empty(): raise RuntimeError("Current depth-chart feed returned no rows")
+    depth_week=int(depth["week"].max()); depth_feed_verified=current_week is not None and depth_week>=current_week
+    for r in depth.filter(pl.col("week")==depth_week).select(["week","gsis_id","depth_team"]).iter_rows(named=True):
+        try: depth_lookup[str(r["gsis_id"])]=float(r["depth_team"])
         except (TypeError,ValueError): pass
-except Exception: pass
+except Exception as e: print(f"Depth-chart feed unavailable or stale: {e}")
 try:
     all_injuries=nfl.load_injuries([year]).filter(pl.col("game_type")=="REG")
-    latest=all_injuries.sort("week",descending=True).unique("gsis_id",keep="first")
+    if all_injuries.is_empty(): raise RuntimeError("Current injury feed returned no rows")
+    injury_week=int(all_injuries["week"].max()); injury_feed_verified=current_week is not None and injury_week>=current_week
+    latest=all_injuries.filter(pl.col("week")==injury_week).unique("gsis_id",keep="last"); injury_rows=latest.height
     player_injuries={str(r["gsis_id"]):r["report_status"] for r in latest.select(["gsis_id","report_status"]).iter_rows(named=True) if r["gsis_id"]}
     ol={"C","G","OG","OT","T"}; defense={"DE","DT","DL","NT","LB","ILB","OLB","CB","DB","S","FS","SS"}
     weights={"out":1.0,"doubtful":.75,"questionable":.25}
@@ -85,7 +95,7 @@ try:
     injuries=all_injuries.filter(pl.col("position").is_in(["RB","FB"]))
     for r in injuries.select(["week","team","report_status"]).iter_rows(named=True):
         k=(str(r["team"]),int(r["week"])); injury_lookup[k]=injury_lookup.get(k,0)+weights.get(str(r["report_status"]).lower(),0)
-except Exception: pass
+except Exception as e: print(f"Injury feed unavailable or stale: {e}")
 pressure_rate={}
 try:
     pbp=pl.concat([nfl.load_pbp([s]) for s in loaded[-2:]],how="diagonal_relaxed")
@@ -112,13 +122,13 @@ players=[]
 def availability(roster_status,injury_status):
     rs=str(roster_status or "").strip().lower()
     inj=str(injury_status or "").strip().lower()
-    blocked_roster=("reserve","injured reserve","pup","suspend","waiv","released","retired","practice")
+    blocked_roster=("reserve","injured reserve","pup","suspend","waiv","release","retired","practice","cut")
     if any(x in rs for x in blocked_roster) or rs in {"res","dev"}:
         return "unavailable"
     if inj=="out": return "out"
     if inj=="doubtful": return "doubtful"
     if inj=="questionable": return "questionable"
-    return "available" if roster_verified else "unverified"
+    return "available" if roster_verified and injury_feed_verified else "unverified"
 for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",maintain_order=True):
     recent=g.head(8); first=recent.row(0,named=True); team=first["current_team"]; games=[]
     for r in recent.iter_rows(named=True):
@@ -136,11 +146,11 @@ for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",
     if availability_status in {"unavailable","out","doubtful"}: continue
     recent_snaps=[x["offense_pct"] for x in games[:3] if x["offense_pct"] is not None]
     expected_snap=None if not recent_snaps else sum(recent_snaps)/len(recent_snaps)
-    depth_team=depth_lookup.get((pid,week))
+    depth_team=depth_lookup.get(pid)
     players.append({"id":pid,"name":first["player_display_name"],"position":first["position"],"team":team,"markets":markets,"games":games,"upcoming":game,"injury_status":injury_status,"availability":{"status":availability_status,"roster_verified":roster_verified,"roster_status":first.get("roster_status")},"role":{"depth_team":depth_team,"likely_starter":None if depth_team is None else depth_team<=1,"expected_snap_pct":expected_snap,"backfield_injury_count":injury_lookup.get((team,week),0)},"scores":{"passing":av["attempts"],"rushing":av["carries"],"receiving":av["targets"],"receptions":av["targets"]}})
 # Roster target demand is compared with the current QB room's recent passing
 # capacity. The 55% shrinkage strength won the 2018-2025 Week 1-4 backtest.
-team_target_demand={}; team_pass_capacity={}; new_skill_arrivals={}
+team_target_demand=dict(rookie_target_proxy); team_pass_capacity={}; new_skill_arrivals={}
 for p in players:
     if p["position"] in {"RB","WR","TE"}:
         demand=sum(g["targets"] for g in p["games"])/len(p["games"])
@@ -153,12 +163,14 @@ for p in players:
     demand=team_target_demand.get(p["team"],0);capacity=team_pass_capacity.get(p["team"],34.0)
     raw=1.0 if not demand else max(.65,min(1.25,capacity/demand));adjusted=1+.55*(raw-1)
     current_games=sum(g["team"]==p["team"] for g in p["games"])
-    p["roster_context"]={"previous_team":p["games"][0]["team"],"changed_team":p["games"][0]["team"]!=p["team"],"recent_current_team_games":current_games,"recent_current_team_share":current_games/len(p["games"]),"new_skill_arrivals":new_skill_arrivals.get(p["team"],0),"team_recent_target_demand":round(demand,2),"estimated_pass_capacity":round(capacity,2),"raw_target_factor":round(raw,4),"target_adjustment":round(adjusted,4),"method":"backtested roster target redistribution"}
+    p["roster_context"]={"previous_team":p["games"][0]["team"],"changed_team":p["games"][0]["team"]!=p["team"],"recent_current_team_games":current_games,"recent_current_team_share":current_games/len(p["games"]),"new_skill_arrivals":new_skill_arrivals.get(p["team"],0),"rookie_skill_players":rookie_skill_counts.get(p["team"],0),"rookie_target_proxy":round(rookie_target_proxy.get(p["team"],0),2),"team_recent_target_demand":round(demand,2),"estimated_pass_capacity":round(capacity,2),"raw_target_factor":round(raw,4),"target_adjustment":round(adjusted,4),"method":"backtested roster target redistribution"}
 selected={p["id"]:p for p in players if p["team"]=="CHI"}
 for market,limit in [("passing",40),("rushing",55),("receiving",75),("receptions",75)]:
     eligible=sorted((p for p in players if market in p["markets"]),key=lambda p:p["scores"][market],reverse=True)[:limit]
     selected.update({p["id"]:p for p in eligible})
 players=list(selected.values())
 for p in players:p.pop("scores",None)
-OUT.write_text(json.dumps({"updated_at":datetime.now(timezone.utc).isoformat(),"seasons_loaded":loaded,"players":sorted(players,key=lambda p:p["name"])},separators=(",",":")),encoding="utf-8")
+OUT.write_text(json.dumps({"updated_at":datetime.now(timezone.utc).isoformat(),"seasons_loaded":loaded,"feeds":{"injuries":{"verified_for_week":injury_feed_verified,"latest_week":injury_week,"current_week":current_week,"rows":injury_rows},"depth_charts":{"verified_for_week":depth_feed_verified,"latest_week":depth_week,"current_week":current_week},"rosters":{"verified":roster_verified}},"players":sorted(players,key=lambda p:p["name"])},separators=(",",":")),encoding="utf-8")
 print(f"Wrote {len(players)} players to {OUT}")
+if not roster_verified or not injury_feed_verified:
+    raise RuntimeError("Safety feeds are not verified for the current week; recommendations remain paused and this refresh will not be published")
