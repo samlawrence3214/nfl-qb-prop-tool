@@ -123,7 +123,7 @@ for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",
     recent=g.head(8); first=recent.row(0,named=True); team=first["current_team"]; games=[]
     for r in recent.iter_rows(named=True):
         tc=float(r["team_carries"] or 0); carries=float(r["carries"] or 0)
-        games.append({"season":int(r["season"]),"week":int(r["week"]),"opponent":r["opponent_team"],"carry_share":None if not tc else carries/tc,"carry_rank":None if r["carry_rank"] is None else float(r["carry_rank"]),"offense_pct":None if r["offense_pct"] is None else float(r["offense_pct"]),**{c:float(r[c] or 0) for c in cols}})
+        games.append({"season":int(r["season"]),"week":int(r["week"]),"team":r["team"],"opponent":r["opponent_team"],"carry_share":None if not tc else carries/tc,"carry_rank":None if r["carry_rank"] is None else float(r["carry_rank"]),"offense_pct":None if r["offense_pct"] is None else float(r["offense_pct"]),**{c:float(r[c] or 0) for c in cols}})
     av={c:sum(x[c] for x in games)/len(games) for c in cols}; markets=[]
     if av["attempts"]>=10: markets.append("passing")
     if av["carries"]>=3: markets.append("rushing")
@@ -138,6 +138,22 @@ for key,g in stats.sort(["season","week"],descending=True).group_by("player_id",
     expected_snap=None if not recent_snaps else sum(recent_snaps)/len(recent_snaps)
     depth_team=depth_lookup.get((pid,week))
     players.append({"id":pid,"name":first["player_display_name"],"position":first["position"],"team":team,"markets":markets,"games":games,"upcoming":game,"injury_status":injury_status,"availability":{"status":availability_status,"roster_verified":roster_verified,"roster_status":first.get("roster_status")},"role":{"depth_team":depth_team,"likely_starter":None if depth_team is None else depth_team<=1,"expected_snap_pct":expected_snap,"backfield_injury_count":injury_lookup.get((team,week),0)},"scores":{"passing":av["attempts"],"rushing":av["carries"],"receiving":av["targets"],"receptions":av["targets"]}})
+# Roster target demand is compared with the current QB room's recent passing
+# capacity. The 55% shrinkage strength won the 2018-2025 Week 1-4 backtest.
+team_target_demand={}; team_pass_capacity={}; new_skill_arrivals={}
+for p in players:
+    if p["position"] in {"RB","WR","TE"}:
+        demand=sum(g["targets"] for g in p["games"])/len(p["games"])
+        if demand>=1: team_target_demand[p["team"]]=team_target_demand.get(p["team"],0)+demand
+        if p["games"][0]["team"]!=p["team"]: new_skill_arrivals[p["team"]]=new_skill_arrivals.get(p["team"],0)+1
+    if p["position"]=="QB":
+        capacity=sum(g["attempts"] for g in p["games"])/len(p["games"])
+        team_pass_capacity[p["team"]]=max(team_pass_capacity.get(p["team"],0),capacity)
+for p in players:
+    demand=team_target_demand.get(p["team"],0);capacity=team_pass_capacity.get(p["team"],34.0)
+    raw=1.0 if not demand else max(.65,min(1.25,capacity/demand));adjusted=1+.55*(raw-1)
+    current_games=sum(g["team"]==p["team"] for g in p["games"])
+    p["roster_context"]={"previous_team":p["games"][0]["team"],"changed_team":p["games"][0]["team"]!=p["team"],"recent_current_team_games":current_games,"recent_current_team_share":current_games/len(p["games"]),"new_skill_arrivals":new_skill_arrivals.get(p["team"],0),"team_recent_target_demand":round(demand,2),"estimated_pass_capacity":round(capacity,2),"raw_target_factor":round(raw,4),"target_adjustment":round(adjusted,4),"method":"backtested roster target redistribution"}
 selected={p["id"]:p for p in players if p["team"]=="CHI"}
 for market,limit in [("passing",40),("rushing",55),("receiving",75),("receptions",75)]:
     eligible=sorted((p for p in players if market in p["markets"]),key=lambda p:p["scores"][market],reverse=True)[:limit]

@@ -69,6 +69,22 @@ out-of-sample improvement. Routes run, late inactive announcements, coaching
 changes, and sportsbook line movement remain explicitly unverified because the
 project does not currently have dependable free feeds for them.
 
+## Offseason roster adjustment
+
+Receiving-yard and reception projections include a roster target-redistribution
+layer. It sums the recent target demand brought by the current RB/WR/TE room,
+compares that demand with the current quarterback room's recent passing
+capacity, and partially scales each player's projection. The adjustment also
+records whether the player changed teams, how many recent games came with the
+current team, and how many skill-position additions joined the roster.
+
+The adjustment strength is 55%, selected from a 2018–2025 Week 1–4 transition
+backtest rather than applied at full force. It improved receptions MAE from
+1.105 to 1.084 and receiving-yards MAE from 14.05 to 13.86 across 1,760 player
+seasons. This handles target competition such as an established receiver
+joining a crowded room, but it cannot fully predict a new coaching scheme or an
+unannounced Week 1 snap rotation.
+
 ## Slip Builder and paper testing
 
 The main page includes a compact Best Model Spot and two-leg paper-parlay

@@ -102,3 +102,22 @@ This is a real but modest improvement. The model therefore reports the joint
 estimate with a warning and never treats it as proof that an SGP is valuable.
 Full results are in `backtests/sgp_joint_validation.csv`; fitted relationships
 are in `backtests/sgp_correlation_summary.csv`.
+
+## Offseason roster continuity
+
+For every season from 2018 through 2025, the roster-transition test inferred
+the new team's skill-position roster and used only each player's prior-season
+usage. It compared the roster's imported target demand with the current QB
+room's prior passing capacity, then evaluated Weeks 1–4. A shared 55% shrinkage
+factor performed best across 1,760 eligible player-seasons.
+
+| Market | Prior-usage MAE | Roster-adjusted MAE | Improvement |
+|---|---:|---:|---:|
+| Receptions | 1.105 | 1.084 | 1.8% |
+| Receiving yards | 14.05 | 13.86 | 1.4% |
+
+The improvement is modest, so the model partially reallocates opportunity and
+shows the adjustment in “Why this number?” rather than treating roster turnover
+as certain. Full grid results are in
+`backtests/roster_continuity_grid.csv` and the selected settings are in
+`backtests/roster_continuity_results.csv`.
