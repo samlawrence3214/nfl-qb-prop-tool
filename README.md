@@ -20,9 +20,12 @@ design import and viability decisions.
 
 ## Data refresh
 
-GitHub Actions runs `scripts/update_data.py` every Tuesday at 12:30 UTC and can
-also be run manually from the Actions tab. The script attempts the current and
-two prior seasons and safely skips a season before its data release exists.
+GitHub Actions runs `scripts/update_data.py` every day at 12:30 and 21:30 UTC
+and can also be run manually from the Actions tab. Each run reloads the newest
+available injury report, roster, schedule, depth chart, role, matchup, and
+weather inputs before rebuilding the projections. The script attempts the
+current and two prior seasons and safely skips a season before its data release
+exists.
 
 ## Privacy
 
