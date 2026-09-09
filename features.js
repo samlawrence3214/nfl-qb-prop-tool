@@ -2,6 +2,7 @@
 let slawsSlip=JSON.parse(localStorage.getItem("slaws_slip")||"[]");
 let slawsBets=JSON.parse(localStorage.getItem("slaws_paper_bets")||"[]");
 let slawsParlayOdds=parseInt(localStorage.getItem("slaws_parlay_odds")||"",10);
+let slawsSgpState=null;
 const slawsSave=()=>{localStorage.setItem("slaws_slip",JSON.stringify(slawsSlip));localStorage.setItem("slaws_paper_bets",JSON.stringify(slawsBets));Number.isFinite(slawsParlayOdds)?localStorage.setItem("slaws_parlay_odds",slawsParlayOdds):localStorage.removeItem("slaws_parlay_odds")};
 const slawsGame=leg=>leg.date+"|"+[leg.team,leg.opponent].sort().join("-");
 const americanBreakEven=o=>o<0?-o/(-o+100):100/(o+100);
@@ -103,14 +104,23 @@ function slawsJointProbability(legs,trials=16000){
   for(let t=0;t<trials;t++){let z=[];for(let i=0;i<n;i++){let u=Math.max(1e-10,rand()),v=rand();z.push(Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v))}let all=true;for(let i=0;i<n;i++){let x=0;for(let j=0;j<=i;j++)x+=l[i][j]*z[j];if(x<=thresholds[i]){all=false;break}}if(all)hits++}
   let p=hits/trials,se=Math.sqrt(p*(1-p)/trials),pairs=[];for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){let row=slawsSgpRho(legs[i],legs[j]);pairs.push({label:legs[i].p.name+" ↔ "+legs[j].p.name,rho:row.rho,samples:row.samples})}return{probability:p,se,shrink,pairs};
 }
-function slawsBuildSgp(){
-  let key=document.getElementById("sgpGame").value,count=+document.getElementById("sgpLegCount").value,all=slawsSgpCandidates(key),chosen=[];
-  for(let x of all)if(!chosen.some(y=>y.p.id===x.p.id)){chosen.push(x);if(chosen.length===count)break}
-  for(let x of all)if(chosen.length<count&&!chosen.includes(x))chosen.push(x);
-  let root=document.getElementById("sgpResult");if(!key){root.innerHTML='<div class="signal warn">Choose a game first.</div>';return}if(!document.getElementById("sgpLineupConfirmed").checked){root.innerHTML='<div class="signal warn">Confirm the current active lineup before generating an SGP.</div>';return}if(chosen.length<count){root.innerHTML='<div class="signal warn">This matchup does not have enough available, role-verified props to build that many legs.</div>';return}
-  let joint=slawsJointProbability(chosen),jointText=joint?`<div class="signal"><b>Correlation-aware SGP estimate: ${Math.round(joint.probability*100)}%</b><div class="fine">Simulation uncertainty: ±${(1.96*joint.se*100).toFixed(1)} points • historical residual correlations • ${joint.shrink<1?"matrix stabilized":"full estimated matrix"}. This is not a guarantee and still requires live price comparison.</div></div>`:'<div class="signal warn">Not enough relationship data to estimate this SGP jointly.</div>';
-  root.innerHTML=`${jointText}<div class="signal warn"><b>Price and lineup gate:</b> Verify every player is active and enter the current FanDuel line and odds after adding these legs. Correlation modeling does not make a bad price valuable.</div><div class="sgp-picks">${chosen.map((x,i)=>`<div class="sgp-pick"><span class="sgp-rank">${i+1}</span><div><b>${x.p.name} over ${x.line.toFixed(1)} ${CFG[x.m].label.toLowerCase()}</b><div class="fine">${x.p.team} • ${Math.round(x.probability*100)}% individual estimate • ${x.s}/10 consistency</div></div></div>`).join("")}</div><button id="addSgp" class="action">Add all ${count} legs to Slip Builder</button>`;
+function slawsRenderSgpState(showAlternatives=false){
+  let root=document.getElementById("sgpResult"),{all,chosen,count}=slawsSgpState,joint=chosen.length>1?slawsJointProbability(chosen):null,complete=chosen.length===count;
+  let jointText=complete&&joint?`<div class="signal"><b>Correlation-aware SGP estimate: ${Math.round(joint.probability*100)}%</b><div class="fine">The same-game relationship is already included • simulation uncertainty ±${(1.96*joint.se*100).toFixed(1)} points • live FanDuel prices still required.</div></div>`:complete?'<div class="signal warn">Not enough relationship data to estimate this SGP jointly.</div>':'<div class="signal warn"><b>Choose a replacement leg.</b> The five strongest remaining options are shown below.</div>';
+  let picks=chosen.map((x,i)=>`<div class="sgp-pick"><span class="sgp-rank">${i+1}</span><div class="sgp-pick-copy"><b>${x.p.name} over ${x.line.toFixed(1)} ${CFG[x.m].label.toLowerCase()}</b><div class="fine">${x.p.team} • ${Math.round(x.probability*100)}% individual estimate • ${x.s}/10 consistency</div></div><button class="sgp-remove" data-i="${i}" aria-label="Remove ${x.p.name}">Remove</button></div>`).join("");
+  let alternatives=all.filter(x=>!chosen.includes(x)).slice(0,5),alternativeHtml=(!complete||showAlternatives)?`<div class="sgp-alternatives"><div class="sgp-alt-heading"><h3>Next five options</h3><span class="fine">Ranked using probability and consistency</span></div>${alternatives.map((x,i)=>`<button class="sgp-alt" data-i="${i}"><span><b>${x.p.name}</b> — Over ${x.line.toFixed(1)} ${CFG[x.m].label.toLowerCase()}</span><span class="fine">${Math.round(x.probability*100)}% • ${x.s}/10 <strong>Use this leg</strong></span></button>`).join("")||'<div class="signal warn">No other eligible props are available for this game.</div>'}</div>`:"";
+  root.innerHTML=`${jointText}<div class="sgp-picks">${picks}</div>${alternativeHtml}<div class="sgp-footer">${complete?`<button id="showSgpAlternatives" class="action secondary">${showAlternatives?"Hide":"See"} next five options</button>`:"<span></span>"}<button id="addSgp" class="action" ${complete?"":"disabled"}>Add all ${count} legs to Slip Builder</button></div>`;
+  root.querySelectorAll(".sgp-remove").forEach(b=>b.onclick=()=>{chosen.splice(+b.dataset.i,1);slawsRenderSgpState(true)});
+  root.querySelectorAll(".sgp-alt").forEach(b=>b.onclick=()=>{if(chosen.length<count)chosen.push(alternatives[+b.dataset.i]);slawsRenderSgpState(false)});
+  if(complete)document.getElementById("showSgpAlternatives").onclick=()=>slawsRenderSgpState(!showAlternatives);
   document.getElementById("addSgp").onclick=()=>{for(let x of chosen){let leg=slawsCatalogLeg(x);if(!slawsSlip.some(y=>y.playerId===leg.playerId&&y.market===leg.market&&y.line===leg.line))slawsSlip.push(leg)}slawsParlayOdds=NaN;slawsSave();document.getElementById("addSgp").textContent="Added to Slip Builder";document.getElementById("addSgp").disabled=true};
+}
+function slawsBuildSgp(){
+  let key=document.getElementById("sgpGame").value,count=+document.getElementById("sgpLegCount").value,all=slawsSgpCandidates(key),chosen=[],root=document.getElementById("sgpResult");
+  if(!key){root.innerHTML='<div class="signal warn">Choose a game first.</div>';return}if(!document.getElementById("sgpLineupConfirmed").checked){root.innerHTML='<div class="signal warn">Confirm the current active lineup before generating an SGP.</div>';return}
+  for(let x of all)if(!chosen.some(y=>y.p.id===x.p.id)){chosen.push(x);if(chosen.length===count)break}for(let x of all)if(chosen.length<count&&!chosen.includes(x))chosen.push(x);
+  if(chosen.length<count){root.innerHTML='<div class="signal warn">This matchup does not have enough available, role-verified props to build that many legs.</div>';return}
+  slawsSgpState={key,count,all,chosen};slawsRenderSgpState(false);
 }
 function slawsRenderSlip(){
   slawsRenderCatalog();const root=document.getElementById("slipLegs"),summary=document.getElementById("slipSummary");
