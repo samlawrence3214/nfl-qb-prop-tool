@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import requests
 import nflreadpy as nfl
 import polars as pl
 ROOT=Path(__file__).resolve().parents[1]; OUT=ROOT/"data"/"players.json"; OUT.parent.mkdir(exist_ok=True)
@@ -70,19 +71,25 @@ for defense,g in rtg.group_by("opponent_team"):
     key=defense[0] if isinstance(defense,tuple) else defense
     rows=g.sort(["season","week"],descending=True).head(5)
     uses=rows["uses"].sum(); rush_eff[key]=None if not uses else float(rows["yards"].sum()/uses)
-depth_lookup={}; depth_feed_verified=False; depth_week=None; injury_lookup={}; player_injuries={}; team_injury_context={}; injury_feed_verified=False; injury_week=None; injury_rows=0
+depth_lookup={}; depth_feed_verified=False; depth_week=None; injury_lookup={}; player_injuries={}; team_injury_context={}; injury_feed_verified=False; injury_week=None; injury_rows=0; injury_source=None
 try:
-    depth=nfl.load_depth_charts([year]).filter(pl.col("game_type")=="REG")
+    depth=nfl.load_depth_charts([year])
+    if "game_type" in depth.columns: depth=depth.filter(pl.col("game_type")=="REG")
     if depth.is_empty(): raise RuntimeError("Current depth-chart feed returned no rows")
-    depth_week=int(depth["week"].max()); depth_feed_verified=current_week is not None and depth_week>=current_week
-    for r in depth.filter(pl.col("week")==depth_week).select(["week","gsis_id","depth_team"]).iter_rows(named=True):
-        try: depth_lookup[str(r["gsis_id"])]=float(r["depth_team"])
+    rank_col="depth_team" if "depth_team" in depth.columns else "pos_rank"
+    if "week" in depth.columns:
+        depth_week=int(depth["week"].max()); depth=depth.filter(pl.col("week")==depth_week)
+    else:
+        depth_week=current_week
+    depth_feed_verified=depth_week is not None and current_week is not None and depth_week>=current_week
+    for r in depth.select(["gsis_id",rank_col]).iter_rows(named=True):
+        try: depth_lookup[str(r["gsis_id"])]=float(r[rank_col])
         except (TypeError,ValueError): pass
 except Exception as e: print(f"Depth-chart feed unavailable or stale: {e}")
 try:
     all_injuries=nfl.load_injuries([year]).filter(pl.col("game_type")=="REG")
     if all_injuries.is_empty(): raise RuntimeError("Current injury feed returned no rows")
-    injury_week=int(all_injuries["week"].max()); injury_feed_verified=current_week is not None and injury_week>=current_week
+    injury_week=int(all_injuries["week"].max()); injury_feed_verified=current_week is not None and injury_week>=current_week; injury_source="nflverse"
     latest=all_injuries.filter(pl.col("week")==injury_week).unique("gsis_id",keep="last"); injury_rows=latest.height
     player_injuries={str(r["gsis_id"]):r["report_status"] for r in latest.select(["gsis_id","report_status"]).iter_rows(named=True) if r["gsis_id"]}
     ol={"C","G","OG","OT","T"}; defense={"DE","DT","DL","NT","LB","ILB","OLB","CB","DB","S","FS","SS"}
@@ -95,7 +102,30 @@ try:
     injuries=all_injuries.filter(pl.col("position").is_in(["RB","FB"]))
     for r in injuries.select(["week","team","report_status"]).iter_rows(named=True):
         k=(str(r["team"]),int(r["week"])); injury_lookup[k]=injury_lookup.get(k,0)+weights.get(str(r["report_status"]).lower(),0)
-except Exception as e: print(f"Injury feed unavailable or stale: {e}")
+except Exception as e:
+    print(f"nflverse injury feed unavailable or stale: {e}; trying current ESPN injury feed")
+    try:
+        response=requests.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries",timeout=30)
+        response.raise_for_status(); payload=response.json()
+        if int(payload.get("season",{}).get("year",0))!=year: raise RuntimeError("ESPN injury season is not current")
+        weights={"out":1.0,"doubtful":.75,"questionable":.25}; ol={"C","G","OG","OT","T"}; defense={"DE","DT","DL","NT","LB","ILB","OLB","CB","DB","S","FS","SS"}
+        name_status={}; injury_rows=0
+        for team_row in payload.get("injuries",[]):
+            team=str(team_row.get("team",{}).get("abbreviation","")).upper()
+            for item in team_row.get("injuries",[]):
+                athlete=item.get("athlete",{}); name=str(athlete.get("fullName","")).strip(); status=str(item.get("status","")).strip(); pos=str(athlete.get("position",{}).get("abbreviation","")).upper()
+                if not name or not status: continue
+                injury_rows+=1; name_status[name.casefold()]=status
+                weight=weights.get(status.lower(),0); ctx=team_injury_context.setdefault(team,{"offensive_line":0.0,"defense":0.0})
+                if pos in ol: ctx["offensive_line"]+=weight
+                if pos in defense: ctx["defense"]+=weight
+        if not injury_rows: raise RuntimeError("ESPN current injury feed returned no rows")
+        for row in stats.select(["player_id","player_display_name"]).unique("player_id").iter_rows(named=True):
+            status=name_status.get(str(row["player_display_name"]).casefold())
+            if status: player_injuries[str(row["player_id"])]=status
+        injury_week=current_week; injury_feed_verified=True; injury_source="ESPN"
+        print(f"Verified {injury_rows} current ESPN injury entries")
+    except Exception as fallback_error: print(f"ESPN injury fallback unavailable: {fallback_error}")
 pressure_rate={}
 try:
     pbp=pl.concat([nfl.load_pbp([s]) for s in loaded[-2:]],how="diagonal_relaxed")
@@ -170,7 +200,7 @@ for market,limit in [("passing",40),("rushing",55),("receiving",75),("receptions
     selected.update({p["id"]:p for p in eligible})
 players=list(selected.values())
 for p in players:p.pop("scores",None)
-OUT.write_text(json.dumps({"updated_at":datetime.now(timezone.utc).isoformat(),"seasons_loaded":loaded,"feeds":{"injuries":{"verified_for_week":injury_feed_verified,"latest_week":injury_week,"current_week":current_week,"rows":injury_rows},"depth_charts":{"verified_for_week":depth_feed_verified,"latest_week":depth_week,"current_week":current_week},"rosters":{"verified":roster_verified}},"players":sorted(players,key=lambda p:p["name"])},separators=(",",":")),encoding="utf-8")
+OUT.write_text(json.dumps({"updated_at":datetime.now(timezone.utc).isoformat(),"seasons_loaded":loaded,"feeds":{"injuries":{"verified_for_week":injury_feed_verified,"latest_week":injury_week,"current_week":current_week,"rows":injury_rows,"source":injury_source},"depth_charts":{"verified_for_week":depth_feed_verified,"latest_week":depth_week,"current_week":current_week},"rosters":{"verified":roster_verified}},"players":sorted(players,key=lambda p:p["name"])},separators=(",",":")),encoding="utf-8")
 print(f"Wrote {len(players)} players to {OUT}")
 if not roster_verified or not injury_feed_verified:
     raise RuntimeError("Safety feeds are not verified for the current week; recommendations remain paused and this refresh will not be published")
