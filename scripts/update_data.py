@@ -109,7 +109,7 @@ except Exception as e:
         response.raise_for_status(); payload=response.json()
         if int(payload.get("season",{}).get("year",0))!=year: raise RuntimeError("ESPN injury season is not current")
         weights={"out":1.0,"doubtful":.75,"questionable":.25}; ol={"C","G","OG","OT","T"}; defense={"DE","DT","DL","NT","LB","ILB","OLB","CB","DB","S","FS","SS"}
-        name_status={}; injury_rows=0; entries=[]
+        name_status={}; name_latest={}; latest_records={}; injury_rows=0; entries=[]
         if payload.get("items"):
             entries=[(None,item) for item in payload["items"]]
         else:
@@ -122,7 +122,14 @@ except Exception as e:
             team=str(athlete_team.get("abbreviation") or team_hint or "").upper()
             name=str(athlete.get("fullName") or athlete.get("displayName") or "").strip(); status=str(item.get("status","")).strip(); pos=str(athlete.get("position",{}).get("abbreviation","")).upper()
             if not name or not status: continue
-            injury_rows+=1; name_status[name.casefold()]=status
+            injury_rows+=1
+            # ESPN can return more than one report for a player. Keep the most
+            # recent dated item instead of relying on response order.
+            item_date=str(item.get("date") or item.get("lastUpdated") or "")
+            name_key=name.casefold()
+            if name_key not in name_latest or item_date>=name_latest[name_key]:
+                name_latest[name_key]=item_date; name_status[name_key]=status; latest_records[name_key]=(team,pos,status)
+        for team,pos,status in latest_records.values():
             weight=weights.get(status.lower(),0); ctx=team_injury_context.setdefault(team,{"offensive_line":0.0,"defense":0.0})
             if pos in ol: ctx["offensive_line"]+=weight
             if pos in defense: ctx["defense"]+=weight
