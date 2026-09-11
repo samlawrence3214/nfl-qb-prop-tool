@@ -31,7 +31,7 @@ header h1{font-weight:650!important;letter-spacing:-.025em!important}
 
 /* FanDuel-inspired visual refresh: original components, system typography, no brand assets. */
 :root{--surface:#fff;--canvas:#f5f7fb;--navy:#081f3d;--orange:#1687ff;--text:#0b1f36;--muted:#66788d;--border:#dbe4ee;--success:#12825c;--danger:#c43b31}
-body{background:linear-gradient(180deg,#eef6ff 0,#f7f9fc 250px)!important;color:var(--text);font-family:Inter,Helvetica Neue",Arial,sans-serif!important}
+body{background:linear-gradient(180deg,#eef6ff 0,#f7f9fc 250px)!important;color:var(--text);font-family:Inter,"Helvetica Neue",Arial,sans-serif!important}
 header{background:linear-gradient(115deg,#071d38 0%,#0b4fa3 62%,#1687ff 100%)!important;border-bottom:0!important;padding-top:22px!important;padding-bottom:22px!important;box-shadow:0 4px 18px #071d382e}
 header h1{font-size:25px!important;font-weight:800!important;letter-spacing:-.035em!important}
 header div{color:#d9ebff;font-size:12px}
