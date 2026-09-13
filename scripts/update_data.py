@@ -1,4 +1,4 @@
-"""Build compact weekly player/matchup data for the browser app."""
+# Updating this file triggers an immediate production data refresh.\n"""Build compact weekly player/matchup data for the browser app."""
 from datetime import datetime, timezone
 from pathlib import Path
 import json
